@@ -35,10 +35,7 @@ if System.get_env("MINIO_HOST") || System.get_env("S3_HOST") do
     region: System.get_env("S3_REGION", "us-east-1"),
     scheme: System.get_env("S3_SCHEME", "http://"),
     host: System.get_env("S3_HOST") || System.get_env("MINIO_HOST") || "localhost",
-    port:
-      String.to_integer(
-        System.get_env("S3_PORT") || System.get_env("MINIO_API_PORT", "9000")
-      )
+    port: String.to_integer(System.get_env("S3_PORT") || System.get_env("MINIO_API_PORT", "9000"))
 end
 
 # S2S tokens — either a JSON blob or comma-separated `service:token,...`.

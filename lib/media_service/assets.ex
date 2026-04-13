@@ -109,7 +109,7 @@ defmodule MediaService.Assets do
     with {:ok, asset} <- fetch(asset_id) do
       case Status.to_atom(asset.status) do
         {:ok, :ready} ->
-          case storage().presign_get(asset.object_key) do
+          case storage().presign_get(asset.object_key, []) do
             {:ok, presign} -> {:ok, %{asset: asset, download: presign}}
             {:error, reason} -> {:error, reason}
           end

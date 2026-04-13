@@ -1,6 +1,14 @@
 import Config
 config :media_service, Oban, testing: :manual
 
+# In tests the code never talks to MinIO — it goes through a Mox stub.
+config :media_service, :storage_adapter, MediaService.Storage.S3Mock
+
+# Deterministic S2S tokens for controller tests.
+config :media_service, :service_tokens,
+  "profile-service": "test-profile-token",
+  "project-service": "test-project-token"
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
