@@ -23,6 +23,48 @@ end
 config :media_service, MediaServiceWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# S3 / MinIO — read from env for dev, staging and prod alike.
+if System.get_env("MINIO_HOST") || System.get_env("S3_HOST") do
+  config :media_service, MediaService.Storage.S3,
+    bucket: System.get_env("MEDIA_S3_BUCKET") || System.get_env("S3_BUCKET") || "media",
+    access_key_id:
+      System.get_env("S3_ACCESS_KEY_ID") || System.get_env("MINIO_ROOT_USER") || "minioadmin",
+    secret_access_key:
+      System.get_env("S3_SECRET_ACCESS_KEY") || System.get_env("MINIO_ROOT_PASSWORD") ||
+        "change_me_password",
+    region: System.get_env("S3_REGION", "us-east-1"),
+    scheme: System.get_env("S3_SCHEME", "http://"),
+    host: System.get_env("S3_HOST") || System.get_env("MINIO_HOST") || "localhost",
+    port:
+      String.to_integer(
+        System.get_env("S3_PORT") || System.get_env("MINIO_API_PORT", "9000")
+      )
+end
+
+# S2S tokens — either a JSON blob or comma-separated `service:token,...`.
+service_tokens =
+  case System.get_env("MEDIA_SERVICE_TOKENS") do
+    nil ->
+      []
+
+    json when binary_part(json, 0, 1) == "{" ->
+      json
+      |> Jason.decode!()
+      |> Enum.map(fn {k, v} -> {String.to_atom(k), to_string(v)} end)
+
+    csv ->
+      csv
+      |> String.split(",", trim: true)
+      |> Enum.map(fn pair ->
+        [service, token] = String.split(pair, ":", parts: 2)
+        {String.to_atom(String.trim(service)), String.trim(token)}
+      end)
+  end
+
+if service_tokens != [] do
+  config :media_service, :service_tokens, service_tokens
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

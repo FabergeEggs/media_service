@@ -5,17 +5,40 @@ defmodule MediaServiceWeb.Router do
     plug :accepts, ["json"]
   end
 
-  scope "/api", MediaServiceWeb do
+  pipeline :s2s_api do
+    plug :accepts, ["json"]
+    plug MediaServiceWeb.Plugs.S2SAuth
+  end
+
+  scope "/api/v1", MediaServiceWeb.API.V1 do
     pipe_through :api
+
+    get "/health", HealthController, :live
+    get "/health/ready", HealthController, :ready
+  end
+
+  scope "/api/v1", MediaServiceWeb.API.V1 do
+    pipe_through :s2s_api
+
+    post "/uploads", UploadController, :create
+    post "/uploads/:id/complete", UploadController, :complete
+
+    get "/assets", AssetController, :index
+    get "/assets/:id", AssetController, :show
+    delete "/assets/:id", AssetController, :delete
+  end
+
+  # Convenience top-level aliases for healthcheck so Docker / Compose probes
+  # don't need to know about the /api/v1 prefix.
+  scope "/" do
+    pipe_through :api
+
+    get "/health", MediaServiceWeb.API.V1.HealthController, :live
+    get "/health/ready", MediaServiceWeb.API.V1.HealthController, :ready
   end
 
   # Enable LiveDashboard in development
   if Application.compile_env(:media_service, :dev_routes) do
-    # If you want to use the LiveDashboard in production, you should put
-    # it behind authentication and allow only admins to access it.
-    # If your application does not have an admins-only section yet,
-    # you can use Plug.BasicAuth to set up some basic authentication
-    # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do

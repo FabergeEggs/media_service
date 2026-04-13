@@ -52,6 +52,22 @@ config :media_service, MediaServiceWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :media_service, dev_routes: true
 
+# Local MinIO (from infra_faberge/mega-compose.yaml)
+config :media_service, MediaService.Storage.S3,
+  bucket: System.get_env("MEDIA_S3_BUCKET", "media"),
+  access_key_id: System.get_env("MINIO_ROOT_USER", "minioadmin"),
+  secret_access_key: System.get_env("MINIO_ROOT_PASSWORD", "change_me_password"),
+  region: "us-east-1",
+  scheme: "http://",
+  host: System.get_env("MINIO_HOST", "localhost"),
+  port: String.to_integer(System.get_env("MINIO_API_PORT", "9000"))
+
+# Dev S2S tokens — hard-coded for the demo; production reads from runtime.exs.
+config :media_service, :service_tokens,
+  "profile-service": "dev-profile-secret",
+  "project-service": "dev-project-secret",
+  "response-service": "dev-response-secret"
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

@@ -15,7 +15,28 @@ config :media_service, Oban,
 
 config :media_service,
   ecto_repos: [MediaService.Repo],
-  generators: [timestamp_type: :utc_datetime, binary_id: true]
+  generators: [timestamp_type: :utc_datetime_usec, binary_id: true]
+
+# Storage adapter — overridden in tests with a Mox stub.
+config :media_service, :storage_adapter, MediaService.Storage.S3
+
+# Default MinIO settings — per-env values live in runtime.exs / dev.exs / test.exs.
+config :media_service, MediaService.Storage.S3,
+  bucket: "media",
+  access_key_id: "minioadmin",
+  secret_access_key: "change_me_password",
+  region: "us-east-1",
+  scheme: "http://",
+  host: "localhost",
+  port: 9000
+
+# Shared-secret tokens for S2S. Per-env overrides in runtime.exs.
+config :media_service, :service_tokens, []
+
+# Ex-AWS uses these regardless of our S3 overrides.
+config :ex_aws,
+  json_codec: Jason,
+  http_client: ExAws.Request.Hackney
 
 # Configure the endpoint
 config :media_service, MediaServiceWeb.Endpoint,
