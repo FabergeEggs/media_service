@@ -1,16 +1,79 @@
-FROM python:3.13-slim
+# syntax=docker/dockerfile:1.6
+
+# ---- builder ----
+ARG ELIXIR_VERSION=1.15.7
+ARG OTP_VERSION=26.2.5
+ARG DEBIAN_VERSION=bookworm-20240612-slim
+
+FROM hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION} AS builder
+
+ENV MIX_ENV=prod \
+    LANG=C.UTF-8
+
+RUN apt-get update -qq \
+ && apt-get install -y --no-install-recommends \
+      build-essential \
+      git \
+      ca-certificates \
+      libmagic-dev \
+      libvips-dev \
+      pkg-config \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN mix local.hex --force \
+ && mix local.rebar --force
 
 WORKDIR /app
 
-# hadolint ignore=DL3008
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+COPY mix.exs mix.lock ./
+COPY config config
+RUN mix deps.get --only $MIX_ENV \
+ && mix deps.compile
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY priv priv
+COPY lib lib
 
-COPY . .
+RUN mix compile \
+ && mix release
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# ---- runtime ----
+FROM debian:bookworm-20240612-slim AS runtime
 
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PHX_SERVER=true \
+    PORT=8000
+
+RUN apt-get update -qq \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      libstdc++6 \
+      libncurses6 \
+      locales \
+      openssl \
+      libmagic1 \
+      libvips42 \
+      ffmpeg \
+      imagemagick \
+      curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+ && locale-gen
+
+WORKDIR /app
+
+RUN groupadd --system app \
+ && useradd --system --gid app --home /app --shell /usr/sbin/nologin app \
+ && chown app:app /app
+
+USER app
+
+COPY --from=builder --chown=app:app /app/_build/prod/rel/media_service ./
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
+  CMD curl -fsS http://localhost:${PORT}/health || exit 1
+
+ENTRYPOINT ["/app/bin/media_service"]
+CMD ["start"]

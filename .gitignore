@@ -25,3 +25,23 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 media_service-*.tar
 
+# Editor / language server
+/.elixir_ls/
+/.vscode/
+/.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Local environment files (commit only .env.example)
+/.env
+/.env.local
+/.env.*.local
+
+# Generated static assets
+/priv/static/
+
+# Local upload fixtures (do not check in real media)
+/priv/test_uploads/
