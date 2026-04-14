@@ -67,7 +67,7 @@ defmodule MediaServiceWeb.API.V1.UploadControllerTest do
         |> post("/api/v1/uploads/#{asset_id}/complete")
         |> json_response(200)
 
-      assert resp["asset"]["status"] == "ready"
+      assert resp["asset"]["status"] == "scanning"
     end
 
     test "422 on size mismatch", %{conn: conn} do

@@ -23,6 +23,19 @@ end
 config :media_service, MediaServiceWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# DATABASE_URL is the universal override. In prod it's required (see the
+# :prod block below). In dev/test the hard-coded localhost fallback in
+# dev.exs/test.exs still wins when the var is unset.
+if config_env() != :prod do
+  case System.get_env("DATABASE_URL") do
+    url when is_binary(url) and url != "" ->
+      config :media_service, MediaService.Repo, url: url
+
+    _ ->
+      :ok
+  end
+end
+
 # S3 / MinIO — read from env for dev, staging and prod alike.
 if System.get_env("MINIO_HOST") || System.get_env("S3_HOST") do
   config :media_service, MediaService.Storage.S3,

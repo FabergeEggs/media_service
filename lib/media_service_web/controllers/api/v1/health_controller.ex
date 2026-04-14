@@ -1,24 +1,12 @@
 defmodule MediaServiceWeb.API.V1.HealthController do
-  @moduledoc """
-  Liveness and readiness probes.
-
-    * `/health`       — liveness: always 200 if the process is up.
-    * `/health/ready` — readiness: checks Postgres and MinIO reachability.
-  """
-
   use MediaServiceWeb, :controller
 
   alias MediaService.Repo
 
-  def live(conn, _params) do
-    json(conn, %{status: "ok"})
-  end
+  def live(conn, _params), do: json(conn, %{status: "ok"})
 
   def ready(conn, _params) do
-    checks = %{
-      db: db_ok?(),
-      storage: storage_ok?()
-    }
+    checks = %{db: db_ok?(), storage: storage_ok?()}
 
     if Enum.all?(checks, fn {_, v} -> v end) do
       json(conn, %{status: "ok", checks: checks})

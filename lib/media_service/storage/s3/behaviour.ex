@@ -1,9 +1,4 @@
 defmodule MediaService.Storage.S3.Behaviour do
-  @moduledoc """
-  Behaviour for the object storage backend. The real implementation lives in
-  `MediaService.Storage.S3`; tests use a Mox-generated stub.
-  """
-
   @type object_key :: String.t()
   @type presign_opts :: keyword()
 

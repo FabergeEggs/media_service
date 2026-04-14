@@ -1,0 +1,63 @@
+# syntax=docker/dockerfile:1.6
+#
+# Dev image. Use this one when you bind-mount the repo into the container and
+# want code reloading (`Phoenix.CodeReloader`) + iex. For production / CI-built
+# images use the main Dockerfile which produces a release.
+#
+#   docker build -f Dockerfile.dev -t media-service:dev .
+#   docker run --rm -it \
+#     -v $PWD:/app \
+#     -v media_deps:/app/deps \
+#     -v media_build:/app/_build \
+#     -p 4000:4000 \
+#     --env-file .env \
+#     media-service:dev
+
+ARG ELIXIR_VERSION=1.15.7
+ARG OTP_VERSION=26.2.5
+ARG DEBIAN_VERSION=trixie-20260406
+
+FROM hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}
+
+ENV MIX_ENV=dev \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PHX_SERVER=true \
+    PORT=4000
+
+# Full toolchain: build tools for NIFs (vix, gen_magic), plus the runtime
+# libraries the sanitisation pipeline will eventually need. Keeping them in
+# the dev image means `mix deps.compile` works from a cold start inside the
+# container without extra provisioning.
+RUN apt-get update -qq \
+ && apt-get install -y --no-install-recommends \
+      build-essential \
+      git \
+      ca-certificates \
+      inotify-tools \
+      pkg-config \
+      libmagic-dev libmagic1 \
+      libvips-dev libvips42 \
+      ffmpeg \
+      imagemagick \
+      curl \
+      postgresql-client \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN mix local.hex --force \
+ && mix local.rebar --force
+
+WORKDIR /app
+
+# The repo is expected to be bind-mounted over /app at runtime, so these COPYs
+# are only a safety net for `docker run` without a mount. `deps` and `_build`
+# are typically mounted as named volumes so artefacts survive across runs.
+COPY mix.exs mix.lock ./
+
+EXPOSE 4000
+
+# Resolve deps on each boot (cheap once lockfile is unchanged), then run any
+# outstanding migrations, then start Phoenix with the code reloader. Using
+# `iex -S mix phx.server` keeps an interactive shell attached so the developer
+# can poke the running system.
+CMD ["sh", "-c", "mix deps.get && mix ecto.create --quiet && mix ecto.migrate && exec iex --name media@127.0.0.1 -S mix phx.server"]

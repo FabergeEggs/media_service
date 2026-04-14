@@ -1,12 +1,4 @@
 defmodule MediaService.Media.Asset do
-  @moduledoc """
-  Ecto schema for a media asset — one row per logical file stored in MinIO.
-
-  This module defines the persistence shape only. Business operations
-  (creating an upload, marking ready, deleting) live in
-  `MediaService.Assets`. Validation changesets live here.
-  """
-
   use Ecto.Schema
 
   import Ecto.Changeset
@@ -76,9 +68,6 @@ defmodule MediaService.Media.Asset do
     owner_kind owner_id created_by_service bucket object_key size_bytes
   )a
 
-  @doc """
-  Changeset for creating a fresh pending asset.
-  """
   @spec create_changeset(map()) :: Ecto.Changeset.t()
   def create_changeset(attrs) do
     %__MODULE__{}
@@ -93,14 +82,20 @@ defmodule MediaService.Media.Asset do
     |> put_change(:status, "pending")
   end
 
-  @doc """
-  Changeset for moving the asset to a new status — guards against invalid
-  transitions according to `MediaService.Media.Status`.
-  """
+  # Fields the scan/process pipeline may update alongside a status transition.
+  @pipeline_fields ~w(
+    detected_mime checksum_sha256 rejection_reason
+    width height duration_ms metadata
+    scanned_at processed_at deleted_at
+  )a
+
+  @rejection_reasons ~w(infected mime_mismatch too_large decode_failed scan_failed svg_not_allowed)
+
   @spec status_changeset(t(), Status.t(), keyword()) :: Ecto.Changeset.t()
   def status_changeset(%__MODULE__{} = asset, new_status, opts \\ [])
       when is_atom(new_status) do
     timestamps = Keyword.get(opts, :timestamps, [])
+    fields = Keyword.get(opts, :fields, [])
 
     from_atom =
       case Status.to_atom(asset.status) do
@@ -110,13 +105,23 @@ defmodule MediaService.Media.Asset do
 
     asset
     |> change(%{status: Atom.to_string(new_status)})
-    |> apply_timestamps(timestamps)
+    |> apply_pairs(timestamps)
+    |> apply_pairs(fields)
+    |> validate_inclusion(:rejection_reason, @rejection_reasons)
     |> validate_transition(from_atom, new_status)
   end
 
-  defp apply_timestamps(changeset, timestamps) do
-    Enum.reduce(timestamps, changeset, fn {field, value}, acc ->
-      put_change(acc, field, value)
+  def rejection_reasons, do: @rejection_reasons
+
+  defp apply_pairs(changeset, pairs) do
+    pairs
+    |> Enum.into([])
+    |> Enum.reduce(changeset, fn {field, value}, acc ->
+      if field in @pipeline_fields do
+        put_change(acc, field, value)
+      else
+        add_error(acc, field, "not writable via status_changeset")
+      end
     end)
   end
 
@@ -129,11 +134,7 @@ defmodule MediaService.Media.Asset do
         changeset
 
       true ->
-        add_error(
-          changeset,
-          :status,
-          "illegal transition from #{from} to #{to}"
-        )
+        add_error(changeset, :status, "illegal transition from #{from} to #{to}")
     end
   end
 end

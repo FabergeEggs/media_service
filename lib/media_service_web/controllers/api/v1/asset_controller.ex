@@ -1,12 +1,4 @@
 defmodule MediaServiceWeb.API.V1.AssetController do
-  @moduledoc """
-  S2S endpoints for reading and deleting already-registered assets:
-
-      GET    /api/v1/assets/:id
-      GET    /api/v1/assets?owner_kind=...&owner_id=...
-      DELETE /api/v1/assets/:id
-  """
-
   use MediaServiceWeb, :controller
 
   alias MediaService.Assets

@@ -1,6 +1,7 @@
 import Config
 
-# Configure your database
+# Configure your database. Defaults target a local Postgres on localhost; when
+# DATABASE_URL is set (dev container, CI) runtime.exs overrides the url.
 config :media_service, MediaService.Repo,
   username: "postgres",
   password: "postgres",

@@ -28,16 +28,8 @@ defmodule MediaServiceWeb.API.V1.AssetControllerTest do
     {:ok, %{asset: asset}} = Assets.create_upload(attrs)
 
     case status do
-      :pending ->
-        asset
-
-      :ready ->
-        expect(Stub.mock(), :head_object, fn _ ->
-          {:ok, %{content_length: 123, content_type: "image/jpeg", etag: nil, last_modified: nil}}
-        end)
-
-        {:ok, ready} = Assets.confirm_upload(asset.id)
-        ready
+      :pending -> asset
+      :ready -> force_ready(asset)
     end
   end
 
@@ -68,31 +60,17 @@ defmodule MediaServiceWeb.API.V1.AssetControllerTest do
     test "filters by owner and returns only ready", %{conn: conn} do
       owner_id = Ecto.UUID.generate()
 
-      ready =
-        (fn ->
-           {:ok, %{asset: a}} =
-             Assets.create_upload(%{
-               owner_kind: "project",
-               owner_id: owner_id,
-               filename: "a.jpg",
-               content_type: "image/jpeg",
-               size_bytes: 123,
-               created_by_service: "project-service"
-             })
+      {:ok, %{asset: a}} =
+        Assets.create_upload(%{
+          owner_kind: "project",
+          owner_id: owner_id,
+          filename: "a.jpg",
+          content_type: "image/jpeg",
+          size_bytes: 123,
+          created_by_service: "project-service"
+        })
 
-           expect(Stub.mock(), :head_object, fn _ ->
-             {:ok,
-              %{
-                content_length: 123,
-                content_type: "image/jpeg",
-                etag: nil,
-                last_modified: nil
-              }}
-           end)
-
-           {:ok, ready} = Assets.confirm_upload(a.id)
-           ready
-         end).()
+      ready = force_ready(a)
 
       {:ok, _} =
         Assets.create_upload(%{

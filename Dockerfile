@@ -1,12 +1,4 @@
-# syntax=docker/dockerfile:1.6
-
-# ---- builder ----
-ARG ELIXIR_VERSION=1.15.7
-ARG OTP_VERSION=26.2.5
-ARG DEBIAN_VERSION=bookworm-20240612-slim
-
-FROM hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION} AS builder
-
+FROM hexpm/elixir:1.20.0-rc.4-erlang-29.0-rc3-debian-bookworm-20260406-slim AS builder
 ENV MIX_ENV=prod \
     LANG=C.UTF-8
 
@@ -37,7 +29,7 @@ RUN mix compile \
  && mix release
 
 # ---- runtime ----
-FROM debian:bookworm-20240612-slim AS runtime
+FROM debian:bookworm-20260406-slim  AS runtime
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -70,10 +62,17 @@ USER app
 
 COPY --from=builder --chown=app:app /app/_build/prod/rel/media_service ./
 
+# File permissions on overlay scripts can be lost across multi-arch builds.
+# Re-assert +x so `migrate`, `server`, `entrypoint` stay runnable in the image.
+USER root
+RUN chmod +x /app/bin/migrate /app/bin/server /app/bin/entrypoint
+USER app
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
   CMD curl -fsS http://localhost:${PORT}/health || exit 1
 
-ENTRYPOINT ["/app/bin/media_service"]
-CMD ["start"]
+# entrypoint runs migrations, then `exec`s into the Phoenix server so the BEAM
+# VM becomes PID 1 and receives SIGTERM from the container runtime directly.
+ENTRYPOINT ["/app/bin/entrypoint"]

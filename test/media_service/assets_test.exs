@@ -4,6 +4,8 @@ defmodule MediaService.AssetsTest do
   import Mox
 
   alias MediaService.Assets
+  alias MediaService.Media.Asset
+  alias MediaService.Repo
   alias MediaService.Storage.Stub
 
   setup :set_mox_from_context
@@ -22,6 +24,22 @@ defmodule MediaService.AssetsTest do
     size_bytes: 123,
     created_by_service: "project-service"
   }
+
+  # Directly flip an asset to :ready, bypassing the scan pipeline.
+  # Used in tests that need a servable asset without running ScanJob.
+  defp force_ready(%Asset{} = asset) do
+    {:ok, ready} =
+      asset
+      |> Asset.status_changeset(:scanning)
+      |> Repo.update()
+
+    {:ok, ready2} =
+      ready
+      |> Asset.status_changeset(:ready)
+      |> Repo.update()
+
+    ready2
+  end
 
   describe "create_upload/1" do
     test "inserts pending asset and returns presigned URL" do
@@ -48,21 +66,15 @@ defmodule MediaService.AssetsTest do
   end
 
   describe "confirm_upload/1" do
-    test "transitions pending → ready when head_object confirms size" do
+    test "transitions pending → scanning when head_object confirms size" do
       {:ok, %{asset: asset}} = Assets.create_upload(@base_attrs)
 
       expect(Stub.mock(), :head_object, fn _key ->
-        {:ok,
-         %{
-           content_length: @base_attrs.size_bytes,
-           content_type: "image/jpeg",
-           etag: "\"x\"",
-           last_modified: nil
-         }}
+        {:ok, %{content_length: 123, content_type: "image/jpeg", etag: "\"x\"", last_modified: nil}}
       end)
 
       assert {:ok, confirmed} = Assets.confirm_upload(asset.id)
-      assert confirmed.status == "ready"
+      assert confirmed.status == "scanning"
     end
 
     test "reports size mismatch without changing status" do
@@ -87,22 +99,26 @@ defmodule MediaService.AssetsTest do
   describe "fetch_with_download_url/1" do
     test "returns nil download for pending asset" do
       {:ok, %{asset: asset}} = Assets.create_upload(@base_attrs)
-
-      assert {:ok, %{asset: ^asset, download: nil}} =
-               Assets.fetch_with_download_url(asset.id)
+      assert {:ok, %{asset: ^asset, download: nil}} = Assets.fetch_with_download_url(asset.id)
     end
 
-    test "returns signed URL once asset is ready" do
+    test "returns signed URL for ready asset" do
+      {:ok, %{asset: asset}} = Assets.create_upload(@base_attrs)
+      ready = force_ready(asset)
+
+      assert {:ok, %{download: %{url: url}}} = Assets.fetch_with_download_url(ready.id)
+      assert url =~ "sig=get"
+    end
+
+    test "returns nil download for scanning asset" do
       {:ok, %{asset: asset}} = Assets.create_upload(@base_attrs)
 
       expect(Stub.mock(), :head_object, fn _ ->
         {:ok, %{content_length: 123, content_type: "image/jpeg", etag: nil, last_modified: nil}}
       end)
 
-      {:ok, _} = Assets.confirm_upload(asset.id)
-
-      assert {:ok, %{download: %{url: url}}} = Assets.fetch_with_download_url(asset.id)
-      assert url =~ "sig=get"
+      {:ok, scanning} = Assets.confirm_upload(asset.id)
+      assert {:ok, %{download: nil}} = Assets.fetch_with_download_url(scanning.id)
     end
   end
 
@@ -123,18 +139,10 @@ defmodule MediaService.AssetsTest do
     test "only ready assets of given owner" do
       owner_id = Ecto.UUID.generate()
 
-      {:ok, %{asset: a}} =
-        Assets.create_upload(%{@base_attrs | owner_id: owner_id})
+      {:ok, %{asset: a}} = Assets.create_upload(%{@base_attrs | owner_id: owner_id})
+      {:ok, %{asset: _b}} = Assets.create_upload(%{@base_attrs | owner_id: owner_id, filename: "other.jpg"})
 
-      {:ok, %{asset: _b}} =
-        Assets.create_upload(%{@base_attrs | owner_id: owner_id, filename: "other.jpg"})
-
-      # Mark the first one ready.
-      expect(Stub.mock(), :head_object, fn _ ->
-        {:ok, %{content_length: 123, content_type: "image/jpeg", etag: nil, last_modified: nil}}
-      end)
-
-      {:ok, _} = Assets.confirm_upload(a.id)
+      force_ready(a)
 
       assert [ready] = Assets.list_for_owner("project", owner_id)
       assert ready.id == a.id

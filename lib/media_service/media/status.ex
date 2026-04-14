@@ -1,40 +1,17 @@
 defmodule MediaService.Media.Status do
-  @moduledoc """
-  State machine for `MediaService.Media.Asset`.
+  @type t :: :pending | :scanning | :ready | :rejected | :deleted
 
-  MVP has three states:
-
-      pending  — row created, caller obtained presigned PUT URL, bytes may or
-                 may not be in MinIO yet.
-      ready    — bytes confirmed in MinIO, asset is servable.
-      deleted  — soft-deleted, bytes scheduled for purge.
-
-  Allowed transitions:
-
-      pending -> ready    (after complete)
-      pending -> deleted  (abandoned upload)
-      ready   -> deleted  (user/cascade delete)
-
-  When the scanner / processor pipeline lands, intermediate states will be
-  inserted between `pending` and `ready` (`scanning`, `processing`,
-  `rejected`). The public API of this module is built to tolerate that:
-  callers match on atoms, not on string values scattered through controllers.
-  """
-
-  @type t :: :pending | :ready | :deleted
-
-  @all ~w(pending ready deleted)a
+  @all ~w(pending scanning ready rejected deleted)a
 
   @transitions %{
-    pending: [:ready, :deleted],
+    pending: [:scanning, :deleted],
+    scanning: [:ready, :rejected, :deleted],
     ready: [:deleted],
+    rejected: [:deleted],
     deleted: []
   }
 
-  @spec all() :: [t()]
   def all, do: @all
-
-  @spec all_as_strings() :: [String.t()]
   def all_as_strings, do: Enum.map(@all, &Atom.to_string/1)
 
   @spec can_transition?(t(), t()) :: boolean()

@@ -28,8 +28,6 @@ defmodule MediaServiceWeb.Router do
     delete "/assets/:id", AssetController, :delete
   end
 
-  # Convenience top-level aliases for healthcheck so Docker / Compose probes
-  # don't need to know about the /api/v1 prefix.
   scope "/" do
     pipe_through :api
 
@@ -37,13 +35,11 @@ defmodule MediaServiceWeb.Router do
     get "/health/ready", MediaServiceWeb.API.V1.HealthController, :ready
   end
 
-  # Enable LiveDashboard in development
   if Application.compile_env(:media_service, :dev_routes) do
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do
       pipe_through [:fetch_session, :protect_from_forgery]
-
       live_dashboard "/dashboard", metrics: MediaServiceWeb.Telemetry
     end
   end

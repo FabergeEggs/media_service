@@ -1,12 +1,6 @@
 defmodule MediaServiceWeb.API.V1.AssetJSON do
-  @moduledoc """
-  JSON views for asset-related endpoints. Kept as a module of pure functions
-  so controllers stay thin.
-  """
-
   alias MediaService.Media.Asset
 
-  @spec upload_created(%{asset: Asset.t(), upload: map()}) :: map()
   def upload_created(%{asset: asset, upload: presign}) do
     %{
       asset: base(asset),
@@ -18,27 +12,14 @@ defmodule MediaServiceWeb.API.V1.AssetJSON do
     }
   end
 
-  @spec show(%{asset: Asset.t(), download: map() | nil}) :: map()
-  def show(%{asset: asset, download: nil}) do
-    %{asset: base(asset), download: nil}
-  end
+  def show(%{asset: asset, download: nil}), do: %{asset: base(asset), download: nil}
 
   def show(%{asset: asset, download: presign}) do
-    %{
-      asset: base(asset),
-      download: %{
-        url: presign.url,
-        expires_in: presign.expires_in
-      }
-    }
+    %{asset: base(asset), download: %{url: presign.url, expires_in: presign.expires_in}}
   end
 
-  @spec list([Asset.t()]) :: map()
-  def list(assets) when is_list(assets) do
-    %{assets: Enum.map(assets, &base/1)}
-  end
+  def list(assets) when is_list(assets), do: %{assets: Enum.map(assets, &base/1)}
 
-  @spec base(Asset.t()) :: map()
   def base(%Asset{} = asset) do
     %{
       id: asset.id,

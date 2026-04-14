@@ -1,11 +1,4 @@
 defmodule MediaServiceWeb.API.V1.UploadController do
-  @moduledoc """
-  S2S endpoints that orchestrate an upload:
-
-      POST /api/v1/uploads             — reserve an asset + presigned PUT URL
-      POST /api/v1/uploads/:id/complete — confirm bytes landed in MinIO
-  """
-
   use MediaServiceWeb, :controller
 
   alias MediaService.Assets
@@ -27,16 +20,12 @@ defmodule MediaServiceWeb.API.V1.UploadController do
 
   def complete(conn, %{"id" => id}) do
     with {:ok, asset} <- Assets.confirm_upload(id) do
-      conn
-      |> put_status(:ok)
-      |> json(%{asset: AssetJSON.base(asset)})
+      json(conn, %{asset: AssetJSON.base(asset)})
     end
   end
 
   defp ensure_required(params) do
-    missing = Enum.reject(@required_params, &Map.has_key?(params, &1))
-
-    case missing do
+    case Enum.reject(@required_params, &Map.has_key?(params, &1)) do
       [] -> :ok
       missing -> {:error, {:missing_params, missing}}
     end

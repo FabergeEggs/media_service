@@ -1,0 +1,12 @@
+#!/bin/sh
+# Release entrypoint used by the Docker image.
+#
+# Runs migrations first (idempotent — Ecto.Migrator skips already-applied ones),
+# then hands over to the Phoenix server via exec so the Erlang VM becomes PID 1
+# and receives SIGTERM directly from Docker/Compose.
+set -eu
+
+cd -P -- "$(dirname -- "$0")"
+
+./migrate
+exec ./server

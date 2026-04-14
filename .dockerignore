@@ -35,4 +35,5 @@ AGENTS.md
 
 # Docker-related
 Dockerfile
+Dockerfile.dev
 .dockerignore

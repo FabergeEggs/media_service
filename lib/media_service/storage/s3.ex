@@ -1,14 +1,4 @@
 defmodule MediaService.Storage.S3 do
-  @moduledoc """
-  Thin wrapper around `ExAws.S3` that speaks to our MinIO bucket.
-
-  All S3-facing code in the service goes through this module, so that the
-  rest of the codebase is not aware of ExAws types or error shapes.
-
-  The module is defined behind a behaviour so that tests can swap in an
-  in-memory implementation via `Mox` without hitting a real MinIO.
-  """
-
   @behaviour MediaService.Storage.S3.Behaviour
 
   alias ExAws.S3
@@ -53,31 +43,20 @@ defmodule MediaService.Storage.S3 do
 
   @impl true
   def head_object(object_key) when is_binary(object_key) do
-    bucket = bucket()
-
-    bucket
+    bucket()
     |> S3.head_object(object_key)
     |> ExAws.request(aws_config_overrides())
     |> case do
-      {:ok, %{headers: headers, status_code: 200}} ->
-        {:ok, normalize_head(headers)}
-
-      {:ok, %{status_code: status}} ->
-        {:error, {:http, status}}
-
-      {:error, {:http_error, 404, _}} ->
-        {:error, :not_found}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, %{headers: headers, status_code: 200}} -> {:ok, normalize_head(headers)}
+      {:ok, %{status_code: status}} -> {:error, {:http, status}}
+      {:error, {:http_error, 404, _}} -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   @impl true
   def delete_object(object_key) when is_binary(object_key) do
-    bucket = bucket()
-
-    bucket
+    bucket()
     |> S3.delete_object(object_key)
     |> ExAws.request(aws_config_overrides())
     |> case do
@@ -88,9 +67,7 @@ defmodule MediaService.Storage.S3 do
 
   @impl true
   def bucket_reachable? do
-    bucket = bucket()
-
-    bucket
+    bucket()
     |> S3.head_bucket()
     |> ExAws.request(aws_config_overrides())
     |> case do
@@ -100,7 +77,6 @@ defmodule MediaService.Storage.S3 do
   end
 
   @impl true
-  @spec bucket() :: String.t()
   def bucket, do: fetch_config!(:bucket)
 
   defp aws_config_overrides do
@@ -142,13 +118,11 @@ defmodule MediaService.Storage.S3 do
   end
 
   defp parse_integer(nil), do: nil
-
   defp parse_integer(value) when is_binary(value) do
     case Integer.parse(value) do
       {n, _} -> n
       :error -> nil
     end
   end
-
   defp parse_integer(value) when is_integer(value), do: value
 end
