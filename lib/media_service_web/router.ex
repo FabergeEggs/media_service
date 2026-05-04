@@ -10,6 +10,11 @@ defmodule MediaServiceWeb.Router do
     plug MediaServiceWeb.Plugs.S2SAuth
   end
 
+  pipeline :user_api do
+    plug :accepts, ["json"]
+    plug MediaServiceWeb.Plugs.UserContext
+  end
+
   scope "/api/v1", MediaServiceWeb.API.V1 do
     pipe_through :api
 
@@ -26,6 +31,14 @@ defmodule MediaServiceWeb.Router do
     get "/assets", AssetController, :index
     get "/assets/:id", AssetController, :show
     delete "/assets/:id", AssetController, :delete
+  end
+
+  # Client-facing read API. Frontend hits this through the gateway,
+  # which injects X-User-* headers after JWT validation.
+  scope "/api/v1/me", MediaServiceWeb.API.V1 do
+    pipe_through :user_api
+
+    get "/assets/:id", AssetController, :user_show
   end
 
   scope "/" do

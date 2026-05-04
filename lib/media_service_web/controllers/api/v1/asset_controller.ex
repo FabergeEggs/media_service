@@ -12,6 +12,14 @@ defmodule MediaServiceWeb.API.V1.AssetController do
     end
   end
 
+  def user_show(conn, %{"id" => id}) do
+    user_id = conn.assigns.current_user.id
+
+    with {:ok, result} <- Assets.fetch_for_user(id, user_id) do
+      json(conn, AssetJSON.user_show(result))
+    end
+  end
+
   def index(conn, %{"owner_kind" => owner_kind, "owner_id" => owner_id}) do
     assets = Assets.list_for_owner(to_string(owner_kind), to_string(owner_id))
     json(conn, AssetJSON.list(assets))

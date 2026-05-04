@@ -109,4 +109,99 @@ defmodule MediaServiceWeb.API.V1.AssetControllerTest do
       assert reloaded.status == "deleted"
     end
   end
+
+  describe "GET /api/v1/me/assets/:id" do
+    # The fixture above stamps `x-service-token`. For user-API tests
+    # we rebuild a clean conn and inject X-User-* instead.
+    defp user_conn(user_id) do
+      Phoenix.ConnTest.build_conn()
+      |> put_req_header("x-user-id", user_id)
+      |> put_req_header("x-username", "alice")
+    end
+
+    defp create_owned_asset(user_id, opts \\ []) do
+      attrs = %{
+        owner_kind: "user",
+        owner_id: user_id,
+        filename: "selfie.jpg",
+        content_type: "image/jpeg",
+        size_bytes: 123,
+        created_by_service: "profile-service",
+        visibility: Keyword.get(opts, :visibility, "owner_only")
+      }
+
+      {:ok, %{asset: a}} = Assets.create_upload(attrs)
+      if Keyword.get(opts, :ready, true), do: force_ready(a), else: a
+    end
+
+    test "401 without X-User-Id" do
+      conn =
+        Phoenix.ConnTest.build_conn()
+        |> get("/api/v1/me/assets/#{Ecto.UUID.generate()}")
+
+      assert json_response(conn, 401) == %{"error" => "unauthorized"}
+    end
+
+    test "owner gets metadata + download_url + kind" do
+      user_id = Ecto.UUID.generate()
+      asset = create_owned_asset(user_id)
+
+      resp = user_conn(user_id) |> get("/api/v1/me/assets/#{asset.id}") |> json_response(200)
+
+      assert resp["id"] == asset.id
+      assert resp["status"] == "ready"
+      assert resp["kind"] == "image"
+      assert resp["mime"] == "image/jpeg"
+      assert resp["size_bytes"] == 123
+      assert resp["download_url"] =~ "sig=get"
+      assert resp["preview_url"] == nil
+    end
+
+    test "stranger gets 404 on someone else's owner_only asset" do
+      other = Ecto.UUID.generate()
+      asset = create_owned_asset(other)
+
+      resp =
+        user_conn(Ecto.UUID.generate())
+        |> get("/api/v1/me/assets/#{asset.id}")
+        |> json_response(404)
+
+      assert resp["error"] == "not_found"
+    end
+
+    test "anyone gets a public asset" do
+      owner = Ecto.UUID.generate()
+      asset = create_owned_asset(owner, visibility: "public")
+
+      resp =
+        user_conn(Ecto.UUID.generate())
+        |> get("/api/v1/me/assets/#{asset.id}")
+        |> json_response(200)
+
+      assert resp["id"] == asset.id
+      assert resp["download_url"] =~ "sig=get"
+    end
+
+    test "pending owned asset returns nil download_url" do
+      user_id = Ecto.UUID.generate()
+      asset = create_owned_asset(user_id, ready: false)
+
+      resp =
+        user_conn(user_id)
+        |> get("/api/v1/me/assets/#{asset.id}")
+        |> json_response(200)
+
+      assert resp["status"] == "pending"
+      assert resp["download_url"] == nil
+    end
+
+    test "404 for unknown id" do
+      resp =
+        user_conn(Ecto.UUID.generate())
+        |> get("/api/v1/me/assets/#{Ecto.UUID.generate()}")
+        |> json_response(404)
+
+      assert resp["error"] == "not_found"
+    end
+  end
 end

@@ -20,6 +20,26 @@ defmodule MediaServiceWeb.API.V1.AssetJSON do
 
   def list(assets) when is_list(assets), do: %{assets: Enum.map(assets, &base/1)}
 
+  def user_show(%{asset: asset, download: download}) do
+    mime = asset.detected_mime || asset.declared_mime
+
+    %{
+      id: asset.id,
+      kind: kind_from_mime(mime),
+      mime: mime,
+      size_bytes: asset.size_bytes,
+      status: asset.status,
+      preview_url: nil,
+      download_url: download && download.url,
+      download_expires_in: download && download.expires_in
+    }
+  end
+
+  defp kind_from_mime("image/" <> _), do: "image"
+  defp kind_from_mime("video/" <> _), do: "video"
+  defp kind_from_mime("audio/" <> _), do: "audio"
+  defp kind_from_mime(_), do: "file"
+
   def base(%Asset{} = asset) do
     %{
       id: asset.id,

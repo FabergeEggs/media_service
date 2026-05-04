@@ -81,6 +81,20 @@ defmodule MediaService.Assets do
     end
   end
 
+  @doc """
+  Like `fetch_with_download_url/1`, but only if the user owns the asset
+  or it is publicly visible. Returns `{:error, :not_found}` for any
+  ownership failure to avoid leaking existence of others' assets.
+  """
+  @spec fetch_for_user(String.t(), String.t()) ::
+          {:ok, %{asset: Asset.t(), download: map() | nil}} | {:error, term()}
+  def fetch_for_user(asset_id, user_id) when is_binary(asset_id) and is_binary(user_id) do
+    with {:ok, asset} <- fetch(asset_id),
+         :ok <- ensure_visible_to(asset, user_id) do
+      fetch_with_download_url(asset_id)
+    end
+  end
+
   @spec list_for_owner(String.t(), String.t()) :: [Asset.t()]
   def list_for_owner(owner_kind, owner_id)
       when is_binary(owner_kind) and is_binary(owner_id) do
@@ -131,6 +145,10 @@ defmodule MediaService.Assets do
       :error -> {:error, :invalid_status}
     end
   end
+
+  defp ensure_visible_to(%Asset{owner_id: owner}, user_id) when owner == user_id, do: :ok
+  defp ensure_visible_to(%Asset{visibility: "public"}, _), do: :ok
+  defp ensure_visible_to(_, _), do: {:error, :not_found}
 
   defp ensure_size_matches(%Asset{size_bytes: n}, %{content_length: n}) when is_integer(n),
     do: :ok
