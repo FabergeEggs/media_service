@@ -28,6 +28,7 @@ defmodule MediaServiceWeb.ConnCase do
       import Plug.Conn
       import Phoenix.ConnTest
       import MediaServiceWeb.ConnCase
+      import MediaService.DataCase, only: [force_ready: 1]
     end
   end
 

@@ -4,6 +4,7 @@ defmodule MediaService.Assets do
   alias MediaService.Media.Asset
   alias MediaService.Media.Owner
   alias MediaService.Media.Status
+  alias MediaService.Pipeline.Workers.ScanJob
   alias MediaService.Repo
   alias MediaService.Storage.Keys
 
@@ -56,8 +57,10 @@ defmodule MediaService.Assets do
     with {:ok, asset} <- fetch(asset_id),
          :ok <- ensure_status(asset, :pending),
          {:ok, head} <- storage().head_object(asset.object_key),
-         :ok <- ensure_size_matches(asset, head) do
-      transition!(asset, :scanning)
+         :ok <- ensure_size_matches(asset, head),
+         {:ok, scanning} <- transition!(asset, :scanning),
+         {:ok, _job} <- Oban.insert(ScanJob.new(%{asset_id: scanning.id})) do
+      {:ok, scanning}
     end
   end
 

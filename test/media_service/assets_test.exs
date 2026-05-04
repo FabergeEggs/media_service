@@ -1,11 +1,11 @@
 defmodule MediaService.AssetsTest do
   use MediaService.DataCase, async: false
+  use Oban.Testing, repo: MediaService.Repo
 
   import Mox
 
   alias MediaService.Assets
-  alias MediaService.Media.Asset
-  alias MediaService.Repo
+  alias MediaService.Pipeline.Workers.ScanJob
   alias MediaService.Storage.Stub
 
   setup :set_mox_from_context
@@ -24,22 +24,6 @@ defmodule MediaService.AssetsTest do
     size_bytes: 123,
     created_by_service: "project-service"
   }
-
-  # Directly flip an asset to :ready, bypassing the scan pipeline.
-  # Used in tests that need a servable asset without running ScanJob.
-  defp force_ready(%Asset{} = asset) do
-    {:ok, ready} =
-      asset
-      |> Asset.status_changeset(:scanning)
-      |> Repo.update()
-
-    {:ok, ready2} =
-      ready
-      |> Asset.status_changeset(:ready)
-      |> Repo.update()
-
-    ready2
-  end
 
   describe "create_upload/1" do
     test "inserts pending asset and returns presigned URL" do
@@ -75,6 +59,7 @@ defmodule MediaService.AssetsTest do
 
       assert {:ok, confirmed} = Assets.confirm_upload(asset.id)
       assert confirmed.status == "scanning"
+      assert_enqueued(worker: ScanJob, args: %{"asset_id" => asset.id})
     end
 
     test "reports size mismatch without changing status" do
