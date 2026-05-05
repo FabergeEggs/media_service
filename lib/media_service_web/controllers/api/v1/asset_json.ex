@@ -35,6 +35,19 @@ defmodule MediaServiceWeb.API.V1.AssetJSON do
     }
   end
 
+  def user_index_item(%Asset{} = a) do
+    mime = a.detected_mime || a.declared_mime
+
+    %{
+      id: a.id,
+      kind: kind_from_mime(mime),
+      mime: mime,
+      size_bytes: a.size_bytes,
+      original_filename: a.original_filename,
+      inserted_at: a.inserted_at
+    }
+  end
+
   defp kind_from_mime("image/" <> _), do: "image"
   defp kind_from_mime("video/" <> _), do: "video"
   defp kind_from_mime("audio/" <> _), do: "audio"

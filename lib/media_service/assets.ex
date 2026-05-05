@@ -95,6 +95,26 @@ defmodule MediaService.Assets do
     end
   end
 
+  @doc "Owner-checked version of `confirm_upload/1`."
+  @spec confirm_upload_for_user(String.t(), String.t()) :: {:ok, Asset.t()} | {:error, term()}
+  def confirm_upload_for_user(asset_id, user_id)
+      when is_binary(asset_id) and is_binary(user_id) do
+    with {:ok, asset} <- fetch(asset_id),
+         :ok <- ensure_owner(asset, user_id) do
+      confirm_upload(asset_id)
+    end
+  end
+
+  @doc "Owner-checked version of `soft_delete/1`."
+  @spec soft_delete_for_user(String.t(), String.t()) :: {:ok, Asset.t()} | {:error, term()}
+  def soft_delete_for_user(asset_id, user_id)
+      when is_binary(asset_id) and is_binary(user_id) do
+    with {:ok, asset} <- fetch(asset_id),
+         :ok <- ensure_owner(asset, user_id) do
+      soft_delete(asset_id)
+    end
+  end
+
   @spec list_for_owner(String.t(), String.t()) :: [Asset.t()]
   def list_for_owner(owner_kind, owner_id)
       when is_binary(owner_kind) and is_binary(owner_id) do
@@ -149,6 +169,9 @@ defmodule MediaService.Assets do
   defp ensure_visible_to(%Asset{owner_id: owner}, user_id) when owner == user_id, do: :ok
   defp ensure_visible_to(%Asset{visibility: "public"}, _), do: :ok
   defp ensure_visible_to(_, _), do: {:error, :not_found}
+
+  defp ensure_owner(%Asset{owner_id: owner}, user_id) when owner == user_id, do: :ok
+  defp ensure_owner(_, _), do: {:error, :not_found}
 
   defp ensure_size_matches(%Asset{size_bytes: n}, %{content_length: n}) when is_integer(n),
     do: :ok
