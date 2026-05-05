@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Release entrypoint used by the Docker image.
 #
 # Runs migrations first (idempotent — Ecto.Migrator skips already-applied ones),
