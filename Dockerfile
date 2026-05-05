@@ -1,10 +1,16 @@
-FROM hexpm/elixir:1.20.0-rc.4-erlang-29.0-rc3-debian-bookworm-20260406-slim AS builder
+ARG ELIXIR_VERSION=1.18.4
+ARG OTP_VERSION=27.3.4
+ARG DEBIAN_VERSION=bookworm-20260406
+
+FROM hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}-slim AS builder
+
 ENV MIX_ENV=prod \
     LANG=C.UTF-8
 
 RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
       build-essential \
+      cmake \
       git \
       ca-certificates \
       libmagic-dev \
@@ -12,8 +18,8 @@ RUN apt-get update -qq \
       pkg-config \
  && rm -rf /var/lib/apt/lists/*
 
-RUN mix local.hex --force \
- && mix local.rebar --force
+RUN mix local.hex --force --if-missing \
+ && mix local.rebar --force --if-missing
 
 WORKDIR /app
 
@@ -24,12 +30,14 @@ RUN mix deps.get --only $MIX_ENV \
 
 COPY priv priv
 COPY lib lib
+COPY rel rel
 
 RUN mix compile \
  && mix release
 
-# ---- runtime ----
-FROM debian:bookworm-20260406-slim  AS runtime
+ARG DEBIAN_VERSION
+
+FROM debian:${DEBIAN_VERSION}-slim AS runtime
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -41,12 +49,12 @@ RUN apt-get update -qq \
       ca-certificates \
       libstdc++6 \
       libncurses6 \
-      locales \
-      openssl \
       libmagic1 \
       libvips42 \
       ffmpeg \
       imagemagick \
+      locales \
+      openssl \
       curl \
  && rm -rf /var/lib/apt/lists/* \
  && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
@@ -62,8 +70,6 @@ USER app
 
 COPY --from=builder --chown=app:app /app/_build/prod/rel/media_service ./
 
-# File permissions on overlay scripts can be lost across multi-arch builds.
-# Re-assert +x so `migrate`, `server`, `entrypoint` stay runnable in the image.
 USER root
 RUN chmod +x /app/bin/migrate /app/bin/server /app/bin/entrypoint
 USER app
@@ -73,6 +79,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
   CMD curl -fsS http://localhost:${PORT}/health || exit 1
 
-# entrypoint runs migrations, then `exec`s into the Phoenix server so the BEAM
-# VM becomes PID 1 and receives SIGTERM from the container runtime directly.
 ENTRYPOINT ["/app/bin/entrypoint"]
