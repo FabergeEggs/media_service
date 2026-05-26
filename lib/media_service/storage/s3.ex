@@ -4,7 +4,7 @@ defmodule MediaService.Storage.S3 do
   alias ExAws.S3
 
   @default_put_ttl 600
-  @default_get_ttl 300
+  @default_get_ttl 157_680_000  # 5 years — URLs are stored as-is in profile_service
 
   @impl true
   def presign_put(object_key, opts \\ []) when is_binary(object_key) do
@@ -16,7 +16,8 @@ defmodule MediaService.Storage.S3 do
       |> maybe_put_header("content-type", Keyword.get(opts, :content_type))
       |> maybe_put_header("content-length", Keyword.get(opts, :content_length))
 
-    ExAws.Config.new(:s3, aws_config_overrides())
+    # Use public config so the URL is reachable from the browser / external client.
+    ExAws.Config.new(:s3, aws_public_config_overrides())
     |> S3.presigned_url(:put, bucket, object_key,
       expires_in: ttl,
       query_params: [],
@@ -33,7 +34,8 @@ defmodule MediaService.Storage.S3 do
     bucket = bucket()
     ttl = Keyword.get(opts, :ttl, @default_get_ttl)
 
-    ExAws.Config.new(:s3, aws_config_overrides())
+    # Use public config so the URL is reachable from the browser / external client.
+    ExAws.Config.new(:s3, aws_public_config_overrides())
     |> S3.presigned_url(:get, bucket, object_key, expires_in: ttl)
     |> case do
       {:ok, url} -> {:ok, %{url: url, expires_in: ttl}}
@@ -79,6 +81,8 @@ defmodule MediaService.Storage.S3 do
   @impl true
   def bucket, do: fetch_config!(:bucket)
 
+  # Used for internal S3 API calls (head, delete, reachability check).
+  # Points to the internal Docker network hostname (e.g. "minio").
   defp aws_config_overrides do
     [
       access_key_id: fetch_config!(:access_key_id),
@@ -88,6 +92,25 @@ defmodule MediaService.Storage.S3 do
       host: fetch_config!(:host),
       port: Keyword.get(config(), :port, 9000),
       s3: [scheme: Keyword.get(config(), :scheme, "http://")]
+    ]
+  end
+
+  # Used only for presigned URL generation.
+  # Uses MINIO_PUBLIC_HOST so the resulting URL is reachable by the browser.
+  # In Docker Compose set MINIO_PUBLIC_HOST=localhost; in prod set to your S3 domain.
+  defp aws_public_config_overrides do
+    cfg = config()
+    public_host = Keyword.get(cfg, :public_host, fetch_config!(:host))
+    public_port = Keyword.get(cfg, :public_port, Keyword.get(cfg, :port, 9000))
+
+    [
+      access_key_id: fetch_config!(:access_key_id),
+      secret_access_key: fetch_config!(:secret_access_key),
+      region: Keyword.get(cfg, :region, "us-east-1"),
+      scheme: Keyword.get(cfg, :scheme, "http://"),
+      host: public_host,
+      port: public_port,
+      s3: [scheme: Keyword.get(cfg, :scheme, "http://")]
     ]
   end
 

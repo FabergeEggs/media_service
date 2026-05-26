@@ -38,6 +38,15 @@ end
 
 # S3 / MinIO — read from env for dev, staging and prod alike.
 if System.get_env("MINIO_HOST") || System.get_env("S3_HOST") do
+  internal_host = System.get_env("S3_HOST") || System.get_env("MINIO_HOST") || "localhost"
+  internal_port = String.to_integer(System.get_env("S3_PORT") || System.get_env("MINIO_API_PORT", "9000"))
+
+  # MINIO_PUBLIC_HOST / MINIO_PUBLIC_PORT are used only for presigned URLs returned to the
+  # browser. In Docker Compose, set MINIO_PUBLIC_HOST=localhost so the browser can reach
+  # MinIO directly. In production, set it to your S3-compatible domain.
+  public_host = System.get_env("MINIO_PUBLIC_HOST") || internal_host
+  public_port = String.to_integer(System.get_env("MINIO_PUBLIC_PORT") || System.get_env("S3_PORT") || System.get_env("MINIO_API_PORT", "9000"))
+
   config :media_service, MediaService.Storage.S3,
     bucket: System.get_env("MEDIA_S3_BUCKET") || System.get_env("S3_BUCKET") || "media",
     access_key_id:
@@ -47,8 +56,10 @@ if System.get_env("MINIO_HOST") || System.get_env("S3_HOST") do
         "change_me_password",
     region: System.get_env("S3_REGION", "us-east-1"),
     scheme: System.get_env("S3_SCHEME", "http://"),
-    host: System.get_env("S3_HOST") || System.get_env("MINIO_HOST") || "localhost",
-    port: String.to_integer(System.get_env("S3_PORT") || System.get_env("MINIO_API_PORT", "9000"))
+    host: internal_host,
+    port: internal_port,
+    public_host: public_host,
+    public_port: public_port
 end
 
 # S2S tokens — either a JSON blob or comma-separated `service:token,...`.
