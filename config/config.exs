@@ -27,7 +27,7 @@ config :media_service, MediaService.Storage.S3,
   secret_access_key: "change_me_password",
   region: "us-east-1",
   scheme: "http://",
-  host: "localhost",
+  host: "minio",
   port: 9000
 
 # Shared-secret tokens for S2S. Per-env overrides in runtime.exs.

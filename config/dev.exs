@@ -65,6 +65,7 @@ config :media_service, MediaService.Storage.S3,
 
 # Dev S2S tokens — hard-coded for the demo; production reads from runtime.exs.
 config :media_service, :service_tokens,
+  "feed-service": "dev-feed-token",
   "profile-service": "dev-profile-secret",
   "project-service": "dev-project-secret",
   "response-service": "dev-response-secret"
