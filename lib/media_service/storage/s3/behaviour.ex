@@ -18,4 +18,9 @@ defmodule MediaService.Storage.S3.Behaviour do
   @callback delete_object(object_key()) :: :ok | {:error, term()}
   @callback bucket_reachable?() :: boolean()
   @callback bucket() :: String.t()
+
+  # Direct upload — stores raw binary to S3 via internal client (no presigned URL).
+  # Used by the server-side upload proxy endpoint.
+  @callback put_object(object_key(), body :: binary(), opts :: keyword()) ::
+              :ok | {:error, term()}
 end

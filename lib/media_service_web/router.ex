@@ -47,6 +47,16 @@ defmodule MediaServiceWeb.Router do
     post "/uploads/:id/complete", MeController, :complete_upload
   end
 
+  # Server-side upload proxy — intentionally unauthenticated.
+  # The asset UUID acts as an upload token (128-bit, unguessable).
+  # Only accepts while asset.status == "pending".
+  # See MeController.upload_data/2 for the security rationale.
+  scope "/api/v1/me", MediaServiceWeb.API.V1 do
+    pipe_through :api
+
+    put "/uploads/:id/data", MeController, :upload_data
+  end
+
   # COMPAT: legacy paths used by profile_service and response_service.
   # See CompatController moduledoc — remove once those services migrate.
   scope "/", MediaServiceWeb.API.V1 do

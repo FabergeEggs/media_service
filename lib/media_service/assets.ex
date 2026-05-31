@@ -45,8 +45,10 @@ defmodule MediaService.Assets do
          {:ok, asset} <- Repo.insert(Ecto.Changeset.put_change(changeset, :id, asset_id)),
          {:ok, presign} <-
            storage().presign_put(object_key,
-             content_type: attrs.content_type,
-             content_length: attrs.size_bytes
+             content_type: attrs.content_type
+             # content_length is intentionally NOT signed — browsers treat
+             # Content-Length as a forbidden header and set it automatically,
+             # so signing it would make every browser upload fail with 403.
            ) do
       {:ok, %{asset: asset, upload: presign}}
     end
@@ -61,6 +63,21 @@ defmodule MediaService.Assets do
          {:ok, scanning} <- transition!(asset, :scanning),
          {:ok, _job} <- Oban.insert(ScanJob.new(%{asset_id: scanning.id})) do
       {:ok, scanning}
+    end
+  end
+
+  @doc """
+  Fetches an asset only if it is in :pending state.
+  Used by the server-side upload proxy — no auth needed because the UUID is
+  effectively a one-time upload token.
+  Returns `{:error, :not_found}` for any non-pending asset to avoid leaking state.
+  """
+  @spec fetch_pending(String.t()) :: {:ok, Asset.t()} | {:error, :not_found}
+  def fetch_pending(asset_id) when is_binary(asset_id) do
+    case fetch(asset_id) do
+      {:ok, %Asset{status: "pending"} = asset} -> {:ok, asset}
+      {:ok, _} -> {:error, :not_found}
+      error -> error
     end
   end
 

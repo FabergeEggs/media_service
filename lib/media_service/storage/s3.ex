@@ -4,7 +4,10 @@ defmodule MediaService.Storage.S3 do
   alias ExAws.S3
 
   @default_put_ttl 600
-  @default_get_ttl 157_680_000  # 5 years — URLs are stored as-is in profile_service
+  # 7 days — AWS Signature V4 maximum for presigned URLs (604800 s).
+  # profile_service stores download_url — on expiry the frontend must re-fetch
+  # via GET /me/assets/{id} to get a fresh URL.
+  @default_get_ttl 604_800
 
   @impl true
   def presign_put(object_key, opts \\ []) when is_binary(object_key) do
@@ -79,10 +82,25 @@ defmodule MediaService.Storage.S3 do
   end
 
   @impl true
+  def put_object(object_key, body, opts \\ []) when is_binary(object_key) and is_binary(body) do
+    content_type = Keyword.get(opts, :content_type, "application/octet-stream")
+
+    bucket()
+    |> S3.put_object(object_key, body, content_type: content_type)
+    |> ExAws.request(aws_config_overrides())
+    |> case do
+      {:ok, _} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @impl true
   def bucket, do: fetch_config!(:bucket)
 
-  # Used for internal S3 API calls (head, delete, reachability check).
+  # Used for internal S3 API calls (head, delete, put, reachability check).
   # Points to the internal Docker network hostname (e.g. "minio").
+  # For regular (non-presigned) requests, ExAws derives the canonical host
+  # from the full URL it builds, so port is included automatically.
   defp aws_config_overrides do
     [
       access_key_id: fetch_config!(:access_key_id),
@@ -95,22 +113,27 @@ defmodule MediaService.Storage.S3 do
     ]
   end
 
-  # Used only for presigned URL generation.
-  # Uses MINIO_PUBLIC_HOST so the resulting URL is reachable by the browser.
-  # In Docker Compose set MINIO_PUBLIC_HOST=localhost; in prod set to your S3 domain.
+  # Used only for presigned URL generation (GET download URLs, S2S upload URLs).
+  # Uses MINIO_PUBLIC_HOST / MINIO_PUBLIC_PORT so the resulting URL is reachable
+  # by the browser. In Docker Compose set MINIO_PUBLIC_HOST=localhost.
+  #
+  # ExAws v2.6+ correctly includes the non-standard port in the canonical host
+  # when signing (i.e. signs "host:localhost:9000"), so host + port as separate
+  # keys works correctly as long as credentials are correct.
   defp aws_public_config_overrides do
     cfg = config()
     public_host = Keyword.get(cfg, :public_host, fetch_config!(:host))
     public_port = Keyword.get(cfg, :public_port, Keyword.get(cfg, :port, 9000))
+    scheme = Keyword.get(cfg, :scheme, "http://")
 
     [
       access_key_id: fetch_config!(:access_key_id),
       secret_access_key: fetch_config!(:secret_access_key),
       region: Keyword.get(cfg, :region, "us-east-1"),
-      scheme: Keyword.get(cfg, :scheme, "http://"),
+      scheme: scheme,
       host: public_host,
       port: public_port,
-      s3: [scheme: Keyword.get(cfg, :scheme, "http://")]
+      s3: [scheme: scheme]
     ]
   end
 

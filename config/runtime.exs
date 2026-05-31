@@ -62,6 +62,13 @@ if System.get_env("MINIO_HOST") || System.get_env("S3_HOST") do
     public_port: public_port
 end
 
+# Public gateway URL — used to build the server-side upload proxy URL returned to clients.
+# In Docker Compose set MEDIA_PUBLIC_GATEWAY_URL=http://localhost:8080.
+# In production set to your public API gateway domain.
+if url = System.get_env("MEDIA_PUBLIC_GATEWAY_URL") do
+  config :media_service, :public_gateway_url, url
+end
+
 # S2S tokens — either a JSON blob or comma-separated `service:token,...`.
 service_tokens =
   case System.get_env("MEDIA_SERVICE_TOKENS") do

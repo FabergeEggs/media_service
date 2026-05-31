@@ -3,6 +3,11 @@ defmodule MediaServiceWeb.API.V1.MeController do
   User-facing endpoints under /api/v1/me/*. Authenticated via X-User-Id
   injected by the API gateway. owner_kind/owner_id are forced to
   `"user"`/`X-User-Id` — frontend cannot upload on behalf of others.
+
+  The `upload_data/2` action is the exception: it is intentionally
+  unauthenticated (routed through :api pipeline, not :user_api).
+  The asset UUID acts as a one-time upload token — it is unguessable
+  (128-bit), and we only accept uploads while status == "pending".
   """
 
   use MediaServiceWeb, :controller
@@ -13,6 +18,8 @@ defmodule MediaServiceWeb.API.V1.MeController do
   action_fallback MediaServiceWeb.API.V1.FallbackController
 
   @upload_required ~w(filename content_type size_bytes)
+  # 100 MB upload limit
+  @max_upload_bytes 104_857_600
 
   def show(conn, %{"id" => id}) do
     user_id = conn.assigns.current_user.id
@@ -44,9 +51,32 @@ defmodule MediaServiceWeb.API.V1.MeController do
              metadata: Map.get(params, "metadata", %{}),
              created_by_service: "frontend"
            }) do
+      # Return proxy upload URL instead of direct presigned MinIO URL.
+      # The client PUTs the file to this endpoint; media_service streams
+      # it to MinIO via the internal S3 client (no signature issues).
+      proxy_url = proxy_upload_url(result.asset.id)
+      modified_upload = Map.put(result.upload, :url, proxy_url)
+
       conn
       |> put_status(:created)
-      |> json(AssetJSON.upload_created(result))
+      |> json(AssetJSON.upload_created(%{result | upload: modified_upload}))
+    end
+  end
+
+  @doc """
+  Accepts raw file body and stores it in S3 via internal client.
+  No user auth required — the asset UUID is the upload token.
+  Only accepts while asset.status == "pending".
+  """
+  def upload_data(conn, %{"id" => id}) do
+    storage = MediaService.Storage.S3
+    content_type =
+      conn |> get_req_header("content-type") |> List.first() || "application/octet-stream"
+
+    with {:ok, asset} <- Assets.fetch_pending(id),
+         {:ok, body, conn} <- read_body(conn, length: @max_upload_bytes),
+         :ok <- storage.put_object(asset.object_key, body, content_type: content_type) do
+      send_resp(conn, 204, "")
     end
   end
 
@@ -64,6 +94,16 @@ defmodule MediaServiceWeb.API.V1.MeController do
     with {:ok, _} <- Assets.soft_delete_for_user(id, user_id) do
       send_resp(conn, :no_content, "")
     end
+  end
+
+  # Build the public URL for the server-side upload proxy.
+  # MEDIA_PUBLIC_GATEWAY_URL should be the externally-reachable base URL
+  # (e.g. "http://localhost:8080" in local Docker Compose).
+  defp proxy_upload_url(asset_id) do
+    base =
+      Application.get_env(:media_service, :public_gateway_url, "http://localhost:8080")
+
+    "#{base}/api/v1/media/me/uploads/#{asset_id}/data"
   end
 
   defp ensure_required(params, required) do
