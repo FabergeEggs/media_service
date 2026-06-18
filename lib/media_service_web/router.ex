@@ -33,9 +33,6 @@ defmodule MediaServiceWeb.Router do
     delete "/assets/:id", AssetController, :delete
   end
 
-  # Client-facing API. Frontend hits this through the gateway, which
-  # injects X-User-* after JWT validation. owner_kind/owner_id are
-  # forced to "user" + X-User-Id — frontend cannot upload for others.
   scope "/api/v1/me", MediaServiceWeb.API.V1 do
     pipe_through :user_api
 
@@ -47,18 +44,12 @@ defmodule MediaServiceWeb.Router do
     post "/uploads/:id/complete", MeController, :complete_upload
   end
 
-  # Server-side upload proxy — intentionally unauthenticated.
-  # The asset UUID acts as an upload token (128-bit, unguessable).
-  # Only accepts while asset.status == "pending".
-  # See MeController.upload_data/2 for the security rationale.
   scope "/api/v1/me", MediaServiceWeb.API.V1 do
     pipe_through :api
 
     put "/uploads/:id/data", MeController, :upload_data
   end
 
-  # COMPAT: legacy paths used by profile_service and response_service.
-  # See CompatController moduledoc — remove once those services migrate.
   scope "/", MediaServiceWeb.API.V1 do
     pipe_through :s2s_api
 

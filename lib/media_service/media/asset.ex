@@ -82,7 +82,6 @@ defmodule MediaService.Media.Asset do
     |> put_change(:status, "pending")
   end
 
-  # Fields the scan/process pipeline may update alongside a status transition.
   @pipeline_fields ~w(
     detected_mime checksum_sha256 rejection_reason
     width height duration_ms metadata

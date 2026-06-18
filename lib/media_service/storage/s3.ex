@@ -4,9 +4,6 @@ defmodule MediaService.Storage.S3 do
   alias ExAws.S3
 
   @default_put_ttl 600
-  # 7 days — AWS Signature V4 maximum for presigned URLs (604800 s).
-  # profile_service stores download_url — on expiry the frontend must re-fetch
-  # via GET /me/assets/{id} to get a fresh URL.
   @default_get_ttl 604_800
 
   @impl true
@@ -19,7 +16,6 @@ defmodule MediaService.Storage.S3 do
       |> maybe_put_header("content-type", Keyword.get(opts, :content_type))
       |> maybe_put_header("content-length", Keyword.get(opts, :content_length))
 
-    # Use public config so the URL is reachable from the browser / external client.
     ExAws.Config.new(:s3, aws_public_config_overrides())
     |> S3.presigned_url(:put, bucket, object_key,
       expires_in: ttl,
@@ -37,7 +33,6 @@ defmodule MediaService.Storage.S3 do
     bucket = bucket()
     ttl = Keyword.get(opts, :ttl, @default_get_ttl)
 
-    # Use public config so the URL is reachable from the browser / external client.
     ExAws.Config.new(:s3, aws_public_config_overrides())
     |> S3.presigned_url(:get, bucket, object_key, expires_in: ttl)
     |> case do
@@ -97,10 +92,6 @@ defmodule MediaService.Storage.S3 do
   @impl true
   def bucket, do: fetch_config!(:bucket)
 
-  # Used for internal S3 API calls (head, delete, put, reachability check).
-  # Points to the internal Docker network hostname (e.g. "minio").
-  # For regular (non-presigned) requests, ExAws derives the canonical host
-  # from the full URL it builds, so port is included automatically.
   defp aws_config_overrides do
     [
       access_key_id: fetch_config!(:access_key_id),
@@ -113,13 +104,6 @@ defmodule MediaService.Storage.S3 do
     ]
   end
 
-  # Used only for presigned URL generation (GET download URLs, S2S upload URLs).
-  # Uses MINIO_PUBLIC_HOST / MINIO_PUBLIC_PORT so the resulting URL is reachable
-  # by the browser. In Docker Compose set MINIO_PUBLIC_HOST=localhost.
-  #
-  # ExAws v2.6+ correctly includes the non-standard port in the canonical host
-  # when signing (i.e. signs "host:localhost:9000"), so host + port as separate
-  # keys works correctly as long as credentials are correct.
   defp aws_public_config_overrides do
     cfg = config()
     public_host = Keyword.get(cfg, :public_host, fetch_config!(:host))

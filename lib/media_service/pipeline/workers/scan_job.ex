@@ -1,12 +1,4 @@
 defmodule MediaService.Pipeline.Workers.ScanJob do
-  @moduledoc """
-  Validates an asset after upload and transitions it `:scanning → :ready`
-  or `:scanning → :rejected`. Scheduled by `Assets.confirm_upload/1`.
-
-  MVP version checks declared vs S3-reported MIME and size only.
-  Real magic-byte sniffing comes later (libmagic / `:gen_magic`).
-  """
-
   use Oban.Worker, queue: :default, max_attempts: 5
 
   require Logger
@@ -27,11 +19,9 @@ defmodule MediaService.Pipeline.Workers.ScanJob do
   end
 
   defp ensure_scanning(:scanning), do: :ok
-  # Asset moved on without us — stale or duplicate job, nothing to do.
   defp ensure_scanning(:ready), do: {:ok, :already_done}
   defp ensure_scanning(:rejected), do: {:ok, :already_done}
   defp ensure_scanning(:deleted), do: {:ok, :already_done}
-  # Pending means confirm_upload hasn't run yet — let Oban retry.
   defp ensure_scanning(:pending), do: {:error, :not_confirmed}
 
   defp classify(%Asset{size_bytes: declared} = asset, %{content_length: actual})

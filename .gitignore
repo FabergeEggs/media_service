@@ -45,3 +45,5 @@ media_service-*.tar
 
 # Local upload fixtures (do not check in real media)
 /priv/test_uploads/
+
+.DS_Store

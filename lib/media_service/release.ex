@@ -1,11 +1,4 @@
 defmodule MediaService.Release do
-  @moduledoc """
-  Release helpers — run from the compiled release without Mix.
-
-      bin/media_service eval "MediaService.Release.migrate()"
-      bin/media_service eval "MediaService.Release.rollback(MediaService.Repo, 20260416090000)"
-  """
-
   @app :media_service
 
   def migrate do

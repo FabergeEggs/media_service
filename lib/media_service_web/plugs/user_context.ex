@@ -1,23 +1,5 @@
 defmodule MediaServiceWeb.Plugs.UserContext do
-  @moduledoc """
-  Resolves the current user from the request, trying two strategies in order:
-
-  1. **Gateway headers** — `X-User-Id` / `X-Username` / `X-User-Roles` injected by
-     the API gateway after JWT validation. Preferred when running behind KrakenD.
-
-  2. **Bearer token fallback** — if the gateway headers are absent (e.g. direct
-     calls during development, or a KrakenD version that doesn't propagate claims
-     with no-op encoding), the plug decodes the `Authorization: Bearer <jwt>` token
-     and extracts the `sub` claim as the user ID.
-     Signature verification is skipped here because the request must already
-     have passed the gateway's JWT validator; this plug only extracts identity.
-     TODO: add JWKS-based verification once the gateway header injection is stable.
-
-  Halts with 401 if neither strategy yields a user ID.
-
-  Use on routes meant for end-users via the gateway. S2S routes keep
-  using `S2SAuth` instead.
-  """
+  # TODO(jwks-verification)
 
   import Plug.Conn
   require Logger
@@ -37,7 +19,6 @@ defmodule MediaServiceWeb.Plugs.UserContext do
     end
   end
 
-  # Strategy 1: gateway-injected headers
   defp resolve_user(conn) do
     case header(conn, "x-user-id") do
       id when is_binary(id) and id != "" ->
@@ -48,12 +29,10 @@ defmodule MediaServiceWeb.Plugs.UserContext do
         }}
 
       _ ->
-        # Strategy 2: extract sub from Bearer token
         extract_from_bearer(conn)
     end
   end
 
-  # Decode JWT body without signature verification (trust the gateway validated it).
   defp extract_from_bearer(conn) do
     with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
          [_header, payload_b64, _sig] <- String.split(token, "."),

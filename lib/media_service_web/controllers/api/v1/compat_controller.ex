@@ -1,13 +1,5 @@
 defmodule MediaServiceWeb.API.V1.CompatController do
-  @moduledoc """
-  COMPAT shim for legacy paths used by other services.
-
-  TODO(upstream): remove this controller once profile_service and
-  response_service migrate to canonical /api/v1/uploads + /api/v1/assets/:id.
-  See:
-    - profile_service/src/infrastructure/clients/media_client.py
-    - response_service/src/services/media_client.py
-  """
+  # TODO(remove-compat-shim)
 
   use MediaServiceWeb, :controller
 
@@ -16,37 +8,25 @@ defmodule MediaServiceWeb.API.V1.CompatController do
 
   action_fallback MediaServiceWeb.API.V1.FallbackController
 
-  # COMPAT(profile_service): DELETE /avatar/:id
   def delete_avatar(conn, %{"id" => id}) do
     with {:ok, _} <- Assets.soft_delete(id) do
       send_resp(conn, :no_content, "")
     end
   end
 
-  # COMPAT(response_service): GET /attached_files/:id
   def show_attached(conn, %{"id" => id}) do
     with {:ok, result} <- Assets.fetch_with_download_url(id) do
       json(conn, AssetJSON.show(result))
     end
   end
 
-  # COMPAT(response_service): DELETE /attached_files/:id
   def delete_attached(conn, %{"id" => id}) do
     with {:ok, _} <- Assets.soft_delete(id) do
       send_resp(conn, :no_content, "")
     end
   end
 
-  # COMPAT(response_service): POST /attached_files (multipart upload).
-  # The legacy client pushes raw bytes via multipart instead of using the
-  # presigned-PUT flow. We synchronously create_upload + PUT to S3 +
-  # complete here so the client gets back a usable asset_id.
-  #
-  # TODO(upstream): response_service must include `owner_id` (the
-  # response UUID) in the form payload — without it we have no way to
-  # know who the file belongs to. Asks for {file, owner_id, [owner_kind]}.
-  # When response_service adopts canonical /api/v1/uploads, drop this
-  # action entirely.
+  # TODO(owner-id)
   def create_attached(conn, params) do
     caller = conn.assigns[:caller_service] || "unknown"
 
@@ -88,9 +68,7 @@ defmodule MediaServiceWeb.API.V1.CompatController do
     end
   end
 
-  # TODO(streaming): for large files this loads the whole body into
-  # memory. Replace with chunked Req streaming once response_service is
-  # gone or the file-size cap is enforced upstream.
+  # TODO(streaming-upload)
   defp put_to_s3(%{url: url, headers: headers}, file_path) do
     body = File.read!(file_path)
 

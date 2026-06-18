@@ -46,9 +46,6 @@ defmodule MediaService.Assets do
          {:ok, presign} <-
            storage().presign_put(object_key,
              content_type: attrs.content_type
-             # content_length is intentionally NOT signed — browsers treat
-             # Content-Length as a forbidden header and set it automatically,
-             # so signing it would make every browser upload fail with 403.
            ) do
       {:ok, %{asset: asset, upload: presign}}
     end
@@ -66,12 +63,6 @@ defmodule MediaService.Assets do
     end
   end
 
-  @doc """
-  Fetches an asset only if it is in :pending state.
-  Used by the server-side upload proxy — no auth needed because the UUID is
-  effectively a one-time upload token.
-  Returns `{:error, :not_found}` for any non-pending asset to avoid leaking state.
-  """
   @spec fetch_pending(String.t()) :: {:ok, Asset.t()} | {:error, :not_found}
   def fetch_pending(asset_id) when is_binary(asset_id) do
     case fetch(asset_id) do
@@ -98,11 +89,6 @@ defmodule MediaService.Assets do
     end
   end
 
-  @doc """
-  Like `fetch_with_download_url/1`, but only if the user owns the asset
-  or it is publicly visible. Returns `{:error, :not_found}` for any
-  ownership failure to avoid leaking existence of others' assets.
-  """
   @spec fetch_for_user(String.t(), String.t()) ::
           {:ok, %{asset: Asset.t(), download: map() | nil}} | {:error, term()}
   def fetch_for_user(asset_id, user_id) when is_binary(asset_id) and is_binary(user_id) do
@@ -112,7 +98,6 @@ defmodule MediaService.Assets do
     end
   end
 
-  @doc "Owner-checked version of `confirm_upload/1`."
   @spec confirm_upload_for_user(String.t(), String.t()) :: {:ok, Asset.t()} | {:error, term()}
   def confirm_upload_for_user(asset_id, user_id)
       when is_binary(asset_id) and is_binary(user_id) do
@@ -122,7 +107,6 @@ defmodule MediaService.Assets do
     end
   end
 
-  @doc "Owner-checked version of `soft_delete/1`."
   @spec soft_delete_for_user(String.t(), String.t()) :: {:ok, Asset.t()} | {:error, term()}
   def soft_delete_for_user(asset_id, user_id)
       when is_binary(asset_id) and is_binary(user_id) do
